@@ -21,11 +21,21 @@ export const register = async (req, res, next) => {
             });
         };
         const file = req.file;
-        if (!file) {
-            return res.status(400).json({ message: "Profile image file is required", success: false });
+        let cloudResponse;
+        if (file) {
+            // only attempt upload if Cloudinary credentials are set
+            if (!process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_NAME || !process.env.CLOUDINARY_API_SECRET) {
+                console.warn("cloudinary credentials missing, skipping upload");
+            } else {
+                try {
+                    const fileUri = getDataUri(file);
+                    cloudResponse = await cloudinary.uploader.upload(fileUri.content);
+                } catch (uploadError) {
+                    console.error("cloudinary upload failed", uploadError);
+                    // don't fail entire registration due to upload; continue without photo
+                }
+            }
         }
-        const fileUri = getDataUri(file);
-        const cloudResponse = await cloudinary.uploader.upload(fileUri.content);
 
         const user = await User.findOne({ email });
         if (user) {
@@ -36,15 +46,19 @@ export const register = async (req, res, next) => {
         }
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        // build profile object, using uploaded photo or a blank string/default
+        const profileData = {};
+        if (cloudResponse) {
+            profileData.profilePhoto = cloudResponse.secure_url;
+        }
+
         await User.create({
             fullname,
             email,
             phoneNumber,
             password: hashedPassword,
             role,
-            profile:{
-                profilePhoto:cloudResponse.secure_url,
-            }
+            profile: profileData,
         });
 
         return res.status(201).json({
@@ -94,8 +108,13 @@ export const login = async (req, res, next) => {
         const tokenData = {
             userId: user._id
         }
-        const token = await jwt.sign(tokenData, process.env.SECRET_KEY, { expiresIn: '1d' });
-
+        // ensure we have a JWT secret before creating tokens
+        const secret = process.env.JWT_SECRET || process.env.SECRET_KEY;
+        if (!secret) {
+            // misconfiguration – respond clearly rather than let jwt throw
+            return res.status(500).json({ message: "Server error: JWT secret is not set", success: false });
+        }
+        const token = await jwt.sign(tokenData, secret, { expiresIn: '1d' });
         user = {
             _id: user._id,
             fullname: user.fullname,
@@ -105,9 +124,14 @@ export const login = async (req, res, next) => {
             profile: user.profile
         }
 
-        return res.status(200).cookie("token", token, { maxAge: 1 * 24 * 60 * 60 * 1000, httpsOnly: true, sameSite: 'strict' }).json({
+        // send cookie as httpOnly and allow cross‑site requests during development
+        // also return token in body so clients can use Authorization header (useful for cross‑origin).
+        return res.status(200)
+          .cookie("token", token, { maxAge: 1 * 24 * 60 * 60 * 1000, httpOnly: true, sameSite: 'none' })
+          .json({
             message: `Welcome back ${user.fullname}`,
             user,
+            token,
             success: true
         })
     } catch (error) {
@@ -116,7 +140,8 @@ export const login = async (req, res, next) => {
 }
 export const logout = async (req, res, next) => {
     try {
-        return res.status(200).cookie("token", "", { maxAge: 0 }).json({
+        // clear the authentication cookie
+        return res.status(200).cookie("token", "", { maxAge: 0, httpOnly: true, sameSite: 'none' }).json({
             message: "Logged out successfully.",
             success: true
         })
@@ -131,9 +156,16 @@ export const updateProfile = async (req, res, next) => {
         const file = req.file;
         let cloudResponse;
         if (file) {
-            // cloudinary ayega idhar
-            const fileUri = getDataUri(file);
-            cloudResponse = await cloudinary.uploader.upload(fileUri.content);
+            if (!process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_NAME || !process.env.CLOUDINARY_API_SECRET) {
+                console.warn("cloudinary credentials missing, skipping upload");
+            } else {
+                try {
+                    const fileUri = getDataUri(file);
+                    cloudResponse = await cloudinary.uploader.upload(fileUri.content);
+                } catch (uploadError) {
+                    console.error("cloudinary upload failed", uploadError);
+                }
+            }
         }
 
         let skillsArray;

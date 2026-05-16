@@ -18,9 +18,10 @@ router.route("/post").post(
     ],
     postJob
 );
-router.route("/get").get(isAuthenticated, getAllJobs);
+// public endpoints - browsing jobs shouldn't require authentication
+router.route("/get").get(getAllJobs);
 router.route("/getadminjobs").get(isAuthenticated, getAdminJobs);
-router.route("/get/:id").get(isAuthenticated, getJobById);
+router.route("/get/:id").get(getJobById);
 
 export default router;
 

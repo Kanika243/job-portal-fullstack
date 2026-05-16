@@ -1,12 +1,12 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "AI Job Recommendation Backend",
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
   "author": "",
   "license": "ISC",
@@ -14,7 +14,7 @@
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.3.0",
     "cookie-parser": "^1.4.6",
-    "cors": "^2.8.5",
+    "cors": "^2.8.6",
     "datauri": "^4.1.0",
     "dotenv": "^16.6.1",
     "express": "^4.19.2",
